@@ -301,7 +301,7 @@ func doTrackedWrite(tx storage.TxBoundExecutor, compiler storage.Compiler, pw *p
 		// delete existing change log rows
 		delPlan, err := compiler.Compile(storage.Query{
 			Action: storage.ActionDelete,
-			Table: ChangeModel.Name,
+			Table:  ChangeModel.Name,
 			Conditions: []storage.Condition{
 				storage.Eq(Change_.TableName, pw.query.Table),
 				storage.Eq(Change_.RowId, id),
@@ -316,16 +316,16 @@ func doTrackedWrite(tx storage.TxBoundExecutor, compiler storage.Compiler, pw *p
 
 		// insert new change log row
 		c := &Change{
-			Version: *head,
+			Version:   *head,
 			TableName: pw.query.Table,
-			RowId: id,
-			Op: string(op),
+			RowId:     id,
+			Op:        string(op),
 		}
 		insPlan, err := compiler.Compile(storage.Query{
-			Action: storage.ActionCreate,
-			Table: ChangeModel.Name,
+			Action:  storage.ActionCreate,
+			Table:   ChangeModel.Name,
 			Columns: []string{Change_.Version, Change_.TableName, Change_.RowId, Change_.Op},
-			Values: []any{c.Version, c.TableName, c.RowId, c.Op},
+			Values:  []any{c.Version, c.TableName, c.RowId, c.Op},
 		}, c)
 		if err != nil {
 			return err

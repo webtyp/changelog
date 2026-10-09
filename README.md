@@ -1,4 +1,5 @@
 # changelog
+<img src="docs/img/badges.svg">
 
 `changelog` is a storage.Conn decorator for `webtyp.com/storage` that records every write (create, update, delete) to tracked tables, and provides a `Since(cursor)` method to retrieve what changed.
 

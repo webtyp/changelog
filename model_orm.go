@@ -8,10 +8,10 @@ import (
 )
 
 type Change struct {
-	Version int64
+	Version   int64
 	TableName string
-	RowId string
-	Op string
+	RowId     string
+	Op        string
 }
 
 func (m *Change) ModelName() string { return "change_log" }
@@ -30,18 +30,26 @@ func (m *Change) EncodeFields(w model.FieldWriter) {
 }
 
 func (m *Change) DecodeFields(r model.FieldReader) {
-	if v, ok := r.Int("version"); ok { m.Version = v }
-	if v, ok := r.String("table_name"); ok { m.TableName = v }
-	if v, ok := r.String("row_id"); ok { m.RowId = v }
-	if v, ok := r.String("op"); ok { m.Op = v }
+	if v, ok := r.Int("version"); ok {
+		m.Version = v
+	}
+	if v, ok := r.String("table_name"); ok {
+		m.TableName = v
+	}
+	if v, ok := r.String("row_id"); ok {
+		m.RowId = v
+	}
+	if v, ok := r.String("op"); ok {
+		m.Op = v
+	}
 }
 
 type ChangeList []*Change
 
-func (s *ChangeList) Len() int             { return len(*s) }
-func (s *ChangeList) At(i int) model.Fielder { return (*s)[i] }
-func (s *ChangeList) Append() model.Fielder  { v := &Change{}; *s = append(*s, v); return v }
-func (s *ChangeList) IsNil() bool          { return s == nil }
+func (s *ChangeList) Len() int                         { return len(*s) }
+func (s *ChangeList) At(i int) model.Fielder           { return (*s)[i] }
+func (s *ChangeList) Append() model.Fielder            { v := &Change{}; *s = append(*s, v); return v }
+func (s *ChangeList) IsNil() bool                      { return s == nil }
 func (s *ChangeList) EncodeFields(_ model.FieldWriter) {}
 func (s *ChangeList) DecodeFields(_ model.FieldReader) {}
 
@@ -50,15 +58,15 @@ func (m *Change) Validate(action byte) error {
 }
 
 var Change_ = struct {
-	Version string
+	Version   string
 	TableName string
-	RowId string
-	Op string
+	RowId     string
+	Op        string
 }{
-	Version: "version",
+	Version:   "version",
 	TableName: "table_name",
-	RowId: "row_id",
-	Op: "op",
+	RowId:     "row_id",
+	Op:        "op",
 }
 
 func ReadOneChange(qb *orm.QB, model *Change) (*Change, error) {

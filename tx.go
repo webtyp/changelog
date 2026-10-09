@@ -5,11 +5,11 @@ import (
 )
 
 type trackedTx struct {
-	inner   storage.TxBoundExecutor
-	log     *Log
-	locked  bool
-	txHead  int64
-	done    bool
+	inner  storage.TxBoundExecutor
+	log    *Log
+	locked bool
+	txHead int64
+	done   bool
 }
 
 func (l *Log) BeginTx() (storage.TxBoundExecutor, error) {
