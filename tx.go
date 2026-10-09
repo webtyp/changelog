@@ -1,7 +1,6 @@
 package changelog
 
 import (
-	"webtyp.com/model"
 	"webtyp.com/storage"
 )
 
@@ -32,14 +31,10 @@ func (tx *trackedTx) Exec(query string, args ...any) error {
 				tx.locked = true
 				tx.txHead = tx.log.head.Load()
 			}
-			return doTrackedWrite(tx.inner, pw, tx.log.tracked, tx.log.schemas, tx.log.pkIdx, &tx.txHead)
+			return doTrackedWrite(tx.inner, tx.log.conn, pw, tx.log.tracked, &tx.txHead)
 		}
 	}
 	return tx.inner.Exec(query, args...)
-}
-
-func (tx *trackedTx) Compile(q storage.Query, m model.Model) (storage.Plan, error) {
-	return tx.inner.(storage.Compiler).Compile(q, m)
 }
 
 func (tx *trackedTx) QueryRow(query string, args ...any) storage.Scanner {

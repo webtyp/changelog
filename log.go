@@ -23,11 +23,17 @@ const (
 	OpDelete Op = "delete" // the row no longer exists
 )
 
+type trackedModel struct {
+	name     string
+	newModel NewModel
+	schema   []model.Field
+	pkIndex  int
+	pkName   string
+}
+
 type Log struct {
 	conn    TxConn
-	tracked map[string]NewModel
-	schemas map[string][]model.Field
-	pkIdx   map[string]int
+	tracked []trackedModel
 	head    atomic.Int64
 	mu      sync.Mutex // serialises all tracked writes of this process
 }
@@ -41,10 +47,7 @@ func New(conn TxConn, tracked ...NewModel) (*Log, error) {
 	}
 
 	l := &Log{
-		conn:    conn,
-		tracked: make(map[string]NewModel),
-		schemas: make(map[string][]model.Field),
-		pkIdx:   make(map[string]int),
+		conn: conn,
 	}
 
 	for _, fn := range tracked {
@@ -56,26 +59,34 @@ func New(conn TxConn, tracked ...NewModel) (*Log, error) {
 			return nil, errFactoryReturnedNil
 		}
 		name := m.ModelName()
-		if _, ok := l.tracked[name]; ok {
-			return nil, logError(fmt.Sprintf(string(errTrackedTwice), name))
+		for _, t := range l.tracked {
+			if t.name == name {
+				return nil, logError(fmt.Sprintf(string(errTrackedTwice), name))
+			}
 		}
 		schema := m.Schema()
 		var pkIdx = -1
+		var pkName = ""
 		for i, f := range schema {
-			if f.DB != nil && f.DB.PK {
-				if f.DB.AutoInc {
+			if f.IsPK() {
+				if f.IsAutoInc() {
 					return nil, logError(fmt.Sprintf(string(errNeedsCallerMintedPK), name))
 				}
 				pkIdx = i
+				pkName = f.Name
 				break
 			}
 		}
 		if pkIdx == -1 {
 			return nil, logError(fmt.Sprintf(string(errNeedsCallerMintedPK), name))
 		}
-		l.tracked[name] = fn
-		l.schemas[name] = schema
-		l.pkIdx[name] = pkIdx
+		l.tracked = append(l.tracked, trackedModel{
+			name:     name,
+			newModel: fn,
+			schema:   schema,
+			pkIndex:  pkIdx,
+			pkName:   pkName,
+		})
 	}
 
 	// Read current head
@@ -157,7 +168,15 @@ func (l *Log) Compile(q storage.Query, m model.Model) (storage.Plan, error) {
 		return inner, err
 	}
 	if (q.Action == storage.ActionCreate || q.Action == storage.ActionUpdate || q.Action == storage.ActionDelete) && m != nil {
-		if _, ok := l.tracked[m.ModelName()]; ok {
+		name := m.ModelName()
+		isTracked := false
+		for _, t := range l.tracked {
+			if t.name == name {
+				isTracked = true
+				break
+			}
+		}
+		if isTracked {
 			return storage.Plan{
 				Mode:  inner.Mode,
 				Query: inner.Query,
@@ -188,7 +207,7 @@ func (l *Log) execTracked(pw *pendingWrite) error {
 	defer tx.Rollback()
 
 	head := l.head.Load()
-	err = doTrackedWrite(tx, pw, l.tracked, l.schemas, l.pkIdx, &head)
+	err = doTrackedWrite(tx, l.conn, pw, l.tracked, &head)
 	if err != nil {
 		return err
 	}
@@ -200,13 +219,28 @@ func (l *Log) execTracked(pw *pendingWrite) error {
 	return nil
 }
 
-func doTrackedWrite(tx storage.TxBoundExecutor, pw *pendingWrite, tracked map[string]NewModel, schemas map[string][]model.Field, pkIdx map[string]int, head *int64) error {
+func doTrackedWrite(tx storage.TxBoundExecutor, compiler storage.Compiler, pw *pendingWrite, tracked []trackedModel, head *int64) error {
 	var ids []string
 	name := pw.model.ModelName()
 
+	var tm trackedModel
+	for _, t := range tracked {
+		if t.name == name {
+			tm = t
+			break
+		}
+	}
+
 	if pw.query.Action == storage.ActionCreate {
-		idx := pkIdx[name]
-		if idx >= len(pw.query.Values) {
+		pkName := tm.pkName
+		idx := -1
+		for i, col := range pw.query.Columns {
+			if col == pkName {
+				idx = i
+				break
+			}
+		}
+		if idx == -1 || idx >= len(pw.query.Values) {
 			return logError(fmt.Sprintf(string(errCreateNoPKValue), pw.query.Table))
 		}
 		val := pw.query.Values[idx]
@@ -215,22 +249,11 @@ func doTrackedWrite(tx storage.TxBoundExecutor, pw *pendingWrite, tracked map[st
 		}
 		ids = append(ids, fmt.Convert(val).String())
 	} else {
-		factory := tracked[name]
-		fresh := factory()
+		fresh := tm.newModel()
 
-		var columns []string
-		schema := schemas[name]
-		idx := pkIdx[name]
-		for _, f := range schema {
-			if f.DB != nil && !f.Exclude {
-				columns = append(columns, f.Name)
-			}
-		}
-
-		plan, err := tx.(storage.Compiler).Compile(storage.Query{
+		plan, err := compiler.Compile(storage.Query{
 			Action:     storage.ActionReadAll,
 			Table:      pw.query.Table,
-			Columns:    columns,
 			Conditions: pw.query.Conditions,
 		}, fresh)
 		if err != nil {
@@ -240,19 +263,23 @@ func doTrackedWrite(tx storage.TxBoundExecutor, pw *pendingWrite, tracked map[st
 		if err != nil {
 			return err
 		}
-		defer rows.Close()
 
+		schema := tm.schema
+		idx := tm.pkIndex
 		for rows.Next() {
 			ptrs := fresh.Pointers()
 			if err := rows.Scan(ptrs...); err != nil {
+				rows.Close()
 				return err
 			}
 			vals := model.ReadValues(schema, ptrs)
 			ids = append(ids, fmt.Convert(vals[idx]).String())
 		}
 		if err := rows.Err(); err != nil {
+			rows.Close()
 			return err
 		}
+		rows.Close()
 	}
 
 	// Exec original write
@@ -272,7 +299,7 @@ func doTrackedWrite(tx storage.TxBoundExecutor, pw *pendingWrite, tracked map[st
 		*head = *head + 1
 
 		// delete existing change log rows
-		delPlan, err := tx.(storage.Compiler).Compile(storage.Query{
+		delPlan, err := compiler.Compile(storage.Query{
 			Action: storage.ActionDelete,
 			Table: ChangeModel.Name,
 			Conditions: []storage.Condition{
@@ -294,7 +321,7 @@ func doTrackedWrite(tx storage.TxBoundExecutor, pw *pendingWrite, tracked map[st
 			RowId: id,
 			Op: string(op),
 		}
-		insPlan, err := tx.(storage.Compiler).Compile(storage.Query{
+		insPlan, err := compiler.Compile(storage.Query{
 			Action: storage.ActionCreate,
 			Table: ChangeModel.Name,
 			Columns: []string{Change_.Version, Change_.TableName, Change_.RowId, Change_.Op},
