@@ -18,6 +18,13 @@ db := orm.New(log)                             // modules get this db as usual
 changes, _ := log.Since(cursor, 500)           // what changed since the client's cursor
 ```
 
+To tell clients "something changed" (for example an SSE poke, never the data), register a callback;
+it runs after each committed write that recorded a change, outside the log's lock:
+
+```go
+log.OnChange(func(head int64) { stream.Publish([]byte("{}"), "dbsync") })
+```
+
 ## Constraints
 
 One process writes a given database through a `Log`. Versions are allocated in memory under a mutex; a second writer process would allocate the same versions, breaking the strictly increasing sequence requirement.

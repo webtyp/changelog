@@ -50,7 +50,9 @@ func (tx *trackedTx) Commit() error {
 		return nil
 	}
 	err := tx.inner.Commit()
+	moved := false
 	if err == nil && tx.locked {
+		moved = tx.txHead != tx.log.head.Load()
 		tx.log.head.Store(tx.txHead)
 	}
 	if tx.locked {
@@ -58,6 +60,9 @@ func (tx *trackedTx) Commit() error {
 		tx.locked = false
 	}
 	tx.done = true
+	if moved {
+		tx.log.changed(tx.txHead)
+	}
 	return err
 }
 

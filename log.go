@@ -36,6 +36,31 @@ type Log struct {
 	tracked []trackedModel
 	head    atomic.Int64
 	mu      sync.Mutex // serialises all tracked writes of this process
+
+	notifyMu sync.Mutex
+	notify   []func(head int64)
+}
+
+// OnChange registers fn, called after every committed write that recorded at least one change,
+// with the new head. It runs in the writer's goroutine, after the log's lock is released (fn may
+// read the log); keep it short — a signal, never the data.
+func (l *Log) OnChange(fn func(head int64)) {
+	if fn == nil {
+		return
+	}
+	l.notifyMu.Lock()
+	l.notify = append(l.notify, fn)
+	l.notifyMu.Unlock()
+}
+
+// changed calls the OnChange callbacks. Callers must not hold l.mu.
+func (l *Log) changed(head int64) {
+	l.notifyMu.Lock()
+	fns := l.notify
+	l.notifyMu.Unlock()
+	for _, fn := range fns {
+		fn(head)
+	}
 }
 
 func New(conn TxConn, tracked ...NewModel) (*Log, error) {
@@ -197,26 +222,34 @@ func (l *Log) Exec(query string, args ...any) error {
 }
 
 func (l *Log) execTracked(pw *pendingWrite) error {
+	head, moved, err := l.writeTracked(pw)
+	if moved {
+		l.changed(head) // after the lock is released
+	}
+	return err
+}
+
+// writeTracked commits pw and its change-log rows; moved reports whether the head advanced.
+func (l *Log) writeTracked(pw *pendingWrite) (head int64, moved bool, err error) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
 	tx, err := l.conn.BeginTx()
 	if err != nil {
-		return err
+		return 0, false, err
 	}
 	defer tx.Rollback()
 
-	head := l.head.Load()
-	err = doTrackedWrite(tx, l.conn, pw, l.tracked, &head)
-	if err != nil {
-		return err
+	before := l.head.Load()
+	head = before
+	if err = doTrackedWrite(tx, l.conn, pw, l.tracked, &head); err != nil {
+		return 0, false, err
 	}
-
-	if err := tx.Commit(); err != nil {
-		return err
+	if err = tx.Commit(); err != nil {
+		return 0, false, err
 	}
 	l.head.Store(head)
-	return nil
+	return head, head != before, nil
 }
 
 func doTrackedWrite(tx storage.TxBoundExecutor, compiler storage.Compiler, pw *pendingWrite, tracked []trackedModel, head *int64) error {

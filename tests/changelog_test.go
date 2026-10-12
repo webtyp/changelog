@@ -348,3 +348,65 @@ func TestChangelog_SinceError(t *testing.T) {
 		t.Fatal("expected error on Since(0, 0)")
 	}
 }
+
+// OnChange: called once per committed write that moved the head, with the new head; never for an
+// untracked table, a write that touched no row, or a rolled-back transaction.
+func TestChangelog_OnChange(t *testing.T) {
+	log, db := setupTestDB(t)
+	var mu sync.Mutex
+	var heads []int64
+	log.OnChange(func(head int64) {
+		mu.Lock()
+		heads = append(heads, head)
+		mu.Unlock()
+	})
+	got := func() []int64 {
+		mu.Lock()
+		defer mu.Unlock()
+		return append([]int64(nil), heads...)
+	}
+
+	if err := db.Create(&conformance.Widget{Id: "w1"}); err != nil {
+		t.Fatal(err)
+	}
+	if h := got(); len(h) != 1 || h[0] != log.Head() {
+		t.Fatalf("after one create: %v, head %d", h, log.Head())
+	}
+
+	db.Create(&Untracked{Id: "u1"})
+	db.Update(&conformance.Widget{Id: "none"}, storage.Eq("id", "none"))
+	if h := got(); len(h) != 1 {
+		t.Fatalf("untracked write or empty update notified: %v", h)
+	}
+
+	db.Tx(func(tx *orm.DB) error {
+		tx.Create(&conformance.Widget{Id: "rb"})
+		return fmt.Errorf("rollback")
+	})
+	if h := got(); len(h) != 1 {
+		t.Fatalf("rolled-back transaction notified: %v", h)
+	}
+
+	if err := db.Tx(func(tx *orm.DB) error {
+		tx.Create(&conformance.Widget{Id: "t1"})
+		return tx.Create(&conformance.Widget{Id: "t2"})
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if h := got(); len(h) != 2 || h[1] != log.Head() {
+		t.Fatalf("a committed transaction must notify once with the new head: %v, head %d", h, log.Head())
+	}
+
+	// A callback may read the log: it runs after the write's lock is released.
+	done := make(chan struct{})
+	log.OnChange(func(int64) {
+		log.Since(0, 10)
+		select {
+		case <-done:
+		default:
+			close(done)
+		}
+	})
+	db.Create(&conformance.Widget{Id: "w2"})
+	<-done
+}
