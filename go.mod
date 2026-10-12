@@ -8,7 +8,7 @@ require (
 	webtyp.com/model v0.2.2
 	webtyp.com/orm v0.12.8
 	webtyp.com/sqlite v0.3.13
-	webtyp.com/storage v0.1.4
+	webtyp.com/storage v0.1.5
 )
 
 require (
