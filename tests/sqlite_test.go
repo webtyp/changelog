@@ -30,7 +30,7 @@ func setupSQLite(t *testing.T) (*changelog.Log, *orm.DB) {
 	if err := migrate.Migrate(conn, dc); err != nil {
 		t.Fatalf("migrate: %v", err)
 	}
-	if err := ddl.New(conn, dc).CreateTable(&conformance.Widget{}); err != nil {
+	if err := ddl.New(conn, dc).Sync(&conformance.Widget{}); err != nil {
 		t.Fatalf("create widget table: %v", err)
 	}
 	log, err := changelog.New(conn.(changelog.TxConn), func() model.Model { return &conformance.Widget{} })
