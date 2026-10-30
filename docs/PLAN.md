@@ -2,8 +2,10 @@
 PLAN: "fix: migrate with ddl.Sync so a new field reaches an existing table"
 EXECUTOR: jules
 REVIEWER: none
-STATUS: running
+STATUS: review
 SESSION: 17738306011562132879
+PR: https://github.com/webtyp/changelog/pull/2
+REVIEWED_COMMIT: 560f8efb53848569b94018d83d7972dd6c152082
 ---
 
 > Read AGENTS.md at the repo root before any change.
