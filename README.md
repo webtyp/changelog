@@ -18,6 +18,8 @@ db := orm.New(log)                             // modules get this db as usual
 changes, _ := log.Since(cursor, 500)           // what changed since the client's cursor
 ```
 
+`migrate.Migrate` uses `ddl.Sync` to ensure missing tables are created and missing columns are added; see the [flow diagram](https://github.com/webtyp/ddl/blob/main/docs/diagrams/SYNC_FLOW.md).
+
 To tell clients "something changed" (for example an SSE poke, never the data), register a callback;
 it runs after each committed write that recorded a change, outside the log's lock:
 
