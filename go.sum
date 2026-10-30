@@ -60,5 +60,5 @@ webtyp.com/sqlite v0.3.13 h1:7zMrK5LVHkztfgjrS6T9thyw92ie7LYPrVcixE3fg+g=
 webtyp.com/sqlite v0.3.13/go.mod h1:VgVGS/5fNbGAWML6Xi0MPwxkgLcxOHy/B7AHwp6zoSA=
 webtyp.com/sqlt v0.0.11 h1:iwci5RZ53S48E4d6sklDtpYZ1Wh02/7nbZlMATl4EYw=
 webtyp.com/sqlt v0.0.11/go.mod h1:6Yk3NR7/cNYnZ6uKMAGyOGcVZnEynLA+BMCUGnR09hU=
-webtyp.com/storage v0.1.8 h1:vEws2tVeJsYN5b+KLjWsxuCX2l68cuqfnUCujHclhBw=
-webtyp.com/storage v0.1.8/go.mod h1:7bwMdHoQnAO5l7weZyB6LR35TLzATR5EcWrW/pXWa5c=
+webtyp.com/storage v0.1.18 h1:2l8jcY5mic8sSWKT76UEvqhC3ffTZQERpyIcmuqaDpA=
+webtyp.com/storage v0.1.18/go.mod h1:yJ/FUhWqroe+5J9JFlZdAwCOa99SXJ1wS/H/PZw64tU=
