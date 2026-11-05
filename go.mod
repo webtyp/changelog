@@ -3,7 +3,7 @@ module webtyp.com/changelog
 go 1.26.8
 
 require (
-	webtyp.com/ddl v0.0.39
+	webtyp.com/ddl v0.0.45
 	webtyp.com/fmt v1.0.0
 	webtyp.com/model v0.2.12
 	webtyp.com/orm v0.12.25
@@ -22,5 +22,5 @@ require (
 	modernc.org/mathutil v1.7.1 // indirect
 	modernc.org/memory v1.11.0 // indirect
 	modernc.org/sqlite v1.54.0 // indirect
-	webtyp.com/sqlt v0.0.11 // indirect
+	webtyp.com/sqlt v0.0.14 // indirect
 )
