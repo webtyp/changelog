@@ -212,7 +212,7 @@ func (l *Log) Compile(q storage.Query, m model.Model) (storage.Plan, error) {
 	return inner, nil
 }
 
-func (l *Log) Exec(query string, args ...any) error {
+func (l *Log) Exec(query string, args ...any) (storage.Result, error) {
 	if len(args) == 1 {
 		if pw, ok := args[0].(*pendingWrite); ok {
 			return l.execTracked(pw)
@@ -221,38 +221,38 @@ func (l *Log) Exec(query string, args ...any) error {
 	return l.conn.Exec(query, args...)
 }
 
-func (l *Log) execTracked(pw *pendingWrite) error {
-	head, moved, err := l.writeTracked(pw)
+func (l *Log) execTracked(pw *pendingWrite) (storage.Result, error) {
+	res, head, moved, err := l.writeTracked(pw)
 	if moved {
 		l.changed(head) // after the lock is released
 	}
-	return err
+	return res, err
 }
 
 // writeTracked commits pw and its change-log rows; moved reports whether the head advanced.
-func (l *Log) writeTracked(pw *pendingWrite) (head int64, moved bool, err error) {
+func (l *Log) writeTracked(pw *pendingWrite) (res storage.Result, head int64, moved bool, err error) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
 	tx, err := l.conn.BeginTx()
 	if err != nil {
-		return 0, false, err
+		return nil, 0, false, err
 	}
 	defer tx.Rollback()
 
 	before := l.head.Load()
 	head = before
-	if err = doTrackedWrite(tx, l.conn, pw, l.tracked, &head); err != nil {
-		return 0, false, err
+	if res, err = doTrackedWrite(tx, l.conn, pw, l.tracked, &head); err != nil {
+		return nil, 0, false, err
 	}
 	if err = tx.Commit(); err != nil {
-		return 0, false, err
+		return nil, 0, false, err
 	}
 	l.head.Store(head)
-	return head, head != before, nil
+	return res, head, head != before, nil
 }
 
-func doTrackedWrite(tx storage.TxBoundExecutor, compiler storage.Compiler, pw *pendingWrite, tracked []trackedModel, head *int64) error {
+func doTrackedWrite(tx storage.TxBoundExecutor, compiler storage.Compiler, pw *pendingWrite, tracked []trackedModel, head *int64) (storage.Result, error) {
 	var ids []string
 	name := pw.model.ModelName()
 
@@ -274,11 +274,11 @@ func doTrackedWrite(tx storage.TxBoundExecutor, compiler storage.Compiler, pw *p
 			}
 		}
 		if idx == -1 || idx >= len(pw.query.Values) {
-			return logError(fmt.Sprintf(string(errCreateNoPKValue), pw.query.Table))
+			return nil, logError(fmt.Sprintf(string(errCreateNoPKValue), pw.query.Table))
 		}
 		val := pw.query.Values[idx]
 		if val == nil {
-			return logError(fmt.Sprintf(string(errCreateNoPKValue), pw.query.Table))
+			return nil, logError(fmt.Sprintf(string(errCreateNoPKValue), pw.query.Table))
 		}
 		ids = append(ids, fmt.Convert(val).String())
 	} else {
@@ -290,11 +290,11 @@ func doTrackedWrite(tx storage.TxBoundExecutor, compiler storage.Compiler, pw *p
 			Conditions: pw.query.Conditions,
 		}, fresh)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		rows, err := tx.Query(plan.Query, plan.Args...)
 		if err != nil {
-			return err
+			return nil, err
 		}
 
 		schema := tm.schema
@@ -303,21 +303,22 @@ func doTrackedWrite(tx storage.TxBoundExecutor, compiler storage.Compiler, pw *p
 			ptrs := fresh.Pointers()
 			if err := rows.Scan(ptrs...); err != nil {
 				rows.Close()
-				return err
+				return nil, err
 			}
 			vals := model.ReadValues(schema, ptrs)
 			ids = append(ids, fmt.Convert(vals[idx]).String())
 		}
 		if err := rows.Err(); err != nil {
 			rows.Close()
-			return err
+			return nil, err
 		}
 		rows.Close()
 	}
 
 	// Exec original write
-	if err := tx.Exec(pw.plan.Query, pw.plan.Args...); err != nil {
-		return err
+	res, err := tx.Exec(pw.plan.Query, pw.plan.Args...)
+	if err != nil {
+		return nil, err
 	}
 
 	// For create, we collected ID before Exec.
@@ -341,10 +342,10 @@ func doTrackedWrite(tx storage.TxBoundExecutor, compiler storage.Compiler, pw *p
 			},
 		}, &Change{})
 		if err != nil {
-			return err
+			return nil, err
 		}
-		if err := tx.Exec(delPlan.Query, delPlan.Args...); err != nil {
-			return err
+		if _, err := tx.Exec(delPlan.Query, delPlan.Args...); err != nil {
+			return nil, err
 		}
 
 		// insert new change log row
@@ -361,13 +362,13 @@ func doTrackedWrite(tx storage.TxBoundExecutor, compiler storage.Compiler, pw *p
 			Values:  []any{c.Version, c.TableName, c.RowId, c.Op},
 		}, c)
 		if err != nil {
-			return err
+			return nil, err
 		}
-		if err := tx.Exec(insPlan.Query, insPlan.Args...); err != nil {
-			return err
+		if _, err := tx.Exec(insPlan.Query, insPlan.Args...); err != nil {
+			return nil, err
 		}
 	}
-	return nil
+	return res, nil
 }
 
 func (l *Log) QueryRow(query string, args ...any) storage.Scanner {

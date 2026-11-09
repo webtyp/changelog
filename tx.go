@@ -23,7 +23,7 @@ func (l *Log) BeginTx() (storage.TxBoundExecutor, error) {
 	}, nil
 }
 
-func (tx *trackedTx) Exec(query string, args ...any) error {
+func (tx *trackedTx) Exec(query string, args ...any) (storage.Result, error) {
 	if len(args) == 1 {
 		if pw, ok := args[0].(*pendingWrite); ok {
 			if !tx.locked {

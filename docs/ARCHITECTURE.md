@@ -24,3 +24,5 @@ If a transaction is already active (`orm.DB.Tx`), the `changelog` hooks into the
 - **Novice-name test**: `changelog.New` returns "a change log over this connection". `changelog.OpUpsert` means "the row exists now".
 - **Complexity ledger**: +3 concepts (Log, Change, cursor), +1 file touched (composition root), +2 lines at call site.
 - **Where it belongs**: A decorator over the storage port, so no domain module changes are necessary and any backend that supports transactions works.
+
+A database proves `changelog` by running `changelog/conformance.Run` in its own tests; `storage/mem` runs it here.
