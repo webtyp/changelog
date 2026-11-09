@@ -2,8 +2,10 @@
 PLAN: "refactor!: Exec reports rows affected and a duplicate key (storage.Result, storage.Duplicate) — changelog"
 EXECUTOR: jules
 REVIEWER: none
-STATUS: running
+STATUS: review
 SESSION: 10831727627540682828
+PR: https://github.com/webtyp/changelog/pull/4
+REVIEWED_COMMIT: 0eda17b09bf3cb9e8ea18817ec6979a8dafe6556
 ---
 
 > Read AGENTS.md at the repo root before any change.
