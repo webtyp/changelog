@@ -32,3 +32,5 @@ log.OnChange(func(head int64) { stream.Publish([]byte("{}"), "dbsync") })
 One process writes a given database through a `Log`. Versions are allocated in memory under a mutex; a second writer process would allocate the same versions, breaking the strictly increasing sequence requirement.
 
 The `change_log` table must be created using the provided `migrate` package. If `ddl` cannot express a non-unique index, skip the index and say so in the README. Currently, index creation is skipped as it is not supported by `ddl`.
+
+A database proves `changelog` by running `changelog/conformance.Run` in its own tests; `storage/mem` runs it here.

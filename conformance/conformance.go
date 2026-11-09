@@ -12,11 +12,16 @@ import (
 	sc "webtyp.com/storage/conformance"
 )
 
+// Factory builds the database a clause runs on.
 type Factory struct {
 	Name string
-	New  func(t *testing.T) (conn storage.Conn, compiler ddl.Compiler)
+	// New returns a fresh database with no table; compiler is nil when it cannot compile DDL (storage/mem).
+	New func(t *testing.T) (conn storage.Conn, compiler ddl.Compiler)
 }
 
+// Run runs the clauses every database must pass to serve changelog. A driver calls it from its own tests.
+//
+//	conformance.Run(t, conformance.Factory{Name: "sqlite", New: newSqliteDatabase})
 func Run(t *testing.T, f Factory) {
 	t.Run("create_update_delete_are_recorded", func(t *testing.T) {
 		log, db := setupLogAndDB(t, f)
