@@ -6,6 +6,8 @@ import (
 	"testing"
 
 	"webtyp.com/changelog"
+	conf "webtyp.com/changelog/conformance"
+	"webtyp.com/ddl"
 	"webtyp.com/model"
 	"webtyp.com/orm"
 	"webtyp.com/storage"
@@ -33,9 +35,9 @@ func setupTestDB(t *testing.T) (*changelog.Log, *orm.DB) {
 	txm := m.(changelog.TxConn)
 
 	plan, _ := m.Compile(storage.Query{Action: storage.ActionCreate, Table: "change_log", Columns: []string{"version", "table_name", "row_id", "op"}, Values: []any{int64(0), "", "", ""}}, &changelog.Change{})
-	m.Exec(plan.Query, plan.Args...)
+	_, _ = m.Exec(plan.Query, plan.Args...)
 	delPlan, _ := m.Compile(storage.Query{Action: storage.ActionDelete, Table: "change_log", Conditions: []storage.Condition{storage.Eq("version", int64(0))}}, &changelog.Change{})
-	m.Exec(delPlan.Query, delPlan.Args...)
+	_, _ = m.Exec(delPlan.Query, delPlan.Args...)
 
 	log, err := changelog.New(txm, func() model.Model { return &conformance.Widget{} })
 	if err != nil {
@@ -51,9 +53,9 @@ func setupTestDBWithRaw(t *testing.T) (changelog.TxConn, *changelog.Log, *orm.DB
 	m := mem.New()
 	txm := m.(changelog.TxConn)
 	plan, _ := m.Compile(storage.Query{Action: storage.ActionCreate, Table: "change_log", Columns: []string{"version", "table_name", "row_id", "op"}, Values: []any{int64(0), "", "", ""}}, &changelog.Change{})
-	m.Exec(plan.Query, plan.Args...)
+	_, _ = m.Exec(plan.Query, plan.Args...)
 	delPlan, _ := m.Compile(storage.Query{Action: storage.ActionDelete, Table: "change_log", Conditions: []storage.Condition{storage.Eq("version", int64(0))}}, &changelog.Change{})
-	m.Exec(delPlan.Query, delPlan.Args...)
+	_, _ = m.Exec(delPlan.Query, delPlan.Args...)
 
 	log, err := changelog.New(txm, func() model.Model { return &conformance.Widget{} })
 	if err != nil {
@@ -62,6 +64,16 @@ func setupTestDBWithRaw(t *testing.T) (changelog.TxConn, *changelog.Log, *orm.DB
 
 	db := orm.New(log)
 	return txm, log, db
+}
+
+func TestConformance(t *testing.T) {
+	conf.Run(t, conf.Factory{
+		Name: "mem",
+		New: func(t *testing.T) (storage.Conn, ddl.Compiler) {
+			m := mem.New()
+			return m, nil
+		},
+	})
 }
 
 func TestChangelog_Create3Widgets(t *testing.T) {

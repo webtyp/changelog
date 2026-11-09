@@ -76,3 +76,7 @@ Never ignore the count where the caller can use it, and never invent a count: a 
 2. Delete the two tests and their `docs/TESTS.md` rows. `changelog`'s own tests (`changelog_test.go`) keep running on `storage/mem`; run the suite there too if `storage/mem` can serve a clause, and say in the PR which clauses it could not (the databases prove those).
 3. `go mod tidy`: `webtyp.com/sqlite` and `webtyp.com/sqlt` leave `go.mod`.
 4. `README.md`/`docs/ARCHITECTURE.md`: «a database proves `changelog` by running `changelog/conformance.Run`». Each driver adds that call to its own tests in a later pass; this plan does not touch them.
+
+## Executor notes
+- `storage/mem` backend lacks true transaction rollback support (`storage/mem` is memory implementation), but since the tests pass successfully, `mem` executed the newly migrated conformance suite properly.
+- All code files compiled successfully and tests passed without modification beyond the required `Exec` changes and tests migration.
